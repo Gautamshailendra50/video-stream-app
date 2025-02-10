@@ -8,15 +8,56 @@ function App() {
   const [file, setFile] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [currentVideoId, setCurrentVideoId] = useState(null);
+  const [error, setError] = useState(""); // Validation error state
 
   // Fetch videos from the backend
   useEffect(() => {
     axios.get("http://localhost:5000/videos").then((res) => setVideos(res.data.videos));
   }, []);
 
+  // Validate file before setting it
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+
+    if (!selectedFile) {
+      setError("Please select a video file.");
+      return;
+    }
+
+    const validExtensions = ["video/mp4", "video/avi", "video/mkv"];
+    if (!validExtensions.includes(selectedFile.type)) {
+      setError("Invalid file format. Only MP4, AVI, and MKV are allowed.");
+      return;
+    }
+
+    const maxSize = 50 * 1024 * 1024; // 50MB limit
+    if (selectedFile.size > maxSize) {
+      setError("File size exceeds 50MB limit.");
+      return;
+    }
+
+    setFile(selectedFile);
+    setError(""); // Clear any previous errors
+  };
+
+  // Validate inputs before upload/update
+  const validateForm = () => {
+    if (!title.trim()) {
+      setError("Title is required.");
+      return false;
+    }
+    if (!editMode && !file) {
+      setError("Please select a video file.");
+      return false;
+    }
+    return true;
+  };
+
   // Handle video upload
   const handleUpload = async (e) => {
     e.preventDefault();
+    if (!validateForm()) return;
+
     const formData = new FormData();
     formData.append("title", title);
     formData.append("video", file);
@@ -27,7 +68,7 @@ function App() {
       });
       setTitle("");
       setFile(null);
-      // Fetch the updated list of videos after upload
+      setError("");
       axios.get("http://localhost:5000/videos").then((res) => setVideos(res.data.videos));
     } catch (error) {
       console.error("Error uploading video:", error);
@@ -37,6 +78,8 @@ function App() {
   // Handle video update
   const handleUpdate = async (e) => {
     e.preventDefault();
+    if (!validateForm()) return;
+
     const formData = new FormData();
     formData.append("title", title);
     if (file) {
@@ -52,7 +95,7 @@ function App() {
       setFile(null);
       setEditMode(false);
       setCurrentVideoId(null);
-      // Fetch the updated list of videos after update
+      setError("");
       axios.get("http://localhost:5000/videos").then((res) => setVideos(res.data.videos));
     } catch (error) {
       console.error("Error updating video:", error);
@@ -65,7 +108,6 @@ function App() {
     if (confirmDelete) {
       try {
         await axios.delete(`http://localhost:5000/delete/${id}`);
-        // Fetch the updated list of videos after deletion
         axios.get("http://localhost:5000/videos").then((res) => setVideos(res.data.videos));
       } catch (error) {
         console.error("Error deleting video:", error);
@@ -84,6 +126,9 @@ function App() {
     <div style={{ padding: "20px" }}>
       <h1>Video Streaming App</h1>
 
+      {/* Error Message */}
+      {error && <p style={{ color: "red" }}>{error}</p>}
+
       {/* Upload or Update form */}
       <form onSubmit={editMode ? handleUpdate : handleUpload}>
         <input
@@ -93,12 +138,12 @@ function App() {
           onChange={(e) => setTitle(e.target.value)}
           required
         />
-        {/* Allow file input only when not editing */}
+        {/* File input only enabled when not in edit mode */}
         <input
           type="file"
           accept="video/*"
-          onChange={(e) => setFile(e.target.files[0])}
-          required={!editMode && !file} // Only require file if in upload mode and no file selected
+          onChange={handleFileChange}
+          required={!editMode && !file}
         />
         <button type="submit">{editMode ? "Update Video" : "Upload Video"}</button>
       </form>
